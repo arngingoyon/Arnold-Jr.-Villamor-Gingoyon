@@ -1,0 +1,246 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1 & Phase 4.1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    // Zero-lookup admin check for list queries (Pillar 8 Cost-Optimization Clause)
+    function isSuperAdminToken() {
+      return isVerifiedUser() && request.auth.token.email == 'arn.gingoyon@gmail.com';
+    }
+
+    // Full admin check for single-document operations
+    function isAdmin() {
+      return isSuperAdminToken() || (
+        isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+        'uid',
+        'displayName',
+        'jobRole',
+        'department',
+        'jobDescription',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid',
+        'displayName',
+        'jobRole',
+        'department',
+        'jobDescription',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.uid == userId &&
+      data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+      data.jobRole is string && data.jobRole.size() >= 2 && data.jobRole.size() <= 120 &&
+      data.department is string && data.department.size() >= 2 && data.department.size() <= 100 &&
+      data.jobDescription is string && data.jobDescription.size() >= 10 && data.jobDescription.size() <= 3000 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: AuditInteraction
+    function isValidAuditInteraction(data, userId) {
+      return data.keys().hasAll([
+        'userId',
+        'sessionId',
+        'category',
+        'userPrompt',
+        'aiResponse',
+        'executiveSummary',
+        'brainstormingIdeas',
+        'auditAlignment',
+        'severityLevel',
+        'userRoleSnapshot',
+        'userNameSnapshot',
+        'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId',
+        'sessionId',
+        'category',
+        'userPrompt',
+        'aiResponse',
+        'executiveSummary',
+        'brainstormingIdeas',
+        'auditAlignment',
+        'severityLevel',
+        'userRoleSnapshot',
+        'userNameSnapshot',
+        'createdAt'
+      ]) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.userId == request.auth.uid && data.userId == userId &&
+      data.sessionId is string && data.sessionId.size() >= 1 && data.sessionId.size() <= 128 && data.sessionId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.category is string && data.category.size() >= 3 && data.category.size() <= 40 &&
+      data.category in ['work_process', 'difficulty_challenge', 'complaint', 'improvement_suggestion', 'general_reflection'] &&
+      data.userPrompt is string && data.userPrompt.size() >= 2 && data.userPrompt.size() <= 5000 &&
+      data.aiResponse is string && data.aiResponse.size() >= 1 && data.aiResponse.size() <= 12000 &&
+      data.executiveSummary is string && data.executiveSummary.size() >= 1 && data.executiveSummary.size() <= 2000 &&
+      data.brainstormingIdeas is string && data.brainstormingIdeas.size() >= 1 && data.brainstormingIdeas.size() <= 3000 &&
+      data.auditAlignment is string && data.auditAlignment.size() >= 1 && data.auditAlignment.size() <= 2000 &&
+      data.severityLevel is string && data.severityLevel.size() >= 3 && data.severityLevel.size() <= 30 &&
+      data.severityLevel in ['low', 'medium', 'high', 'positive_innovation'] &&
+      data.userRoleSnapshot is string && data.userRoleSnapshot.size() >= 2 && data.userRoleSnapshot.size() <= 250 &&
+      data.userNameSnapshot is string && data.userNameSnapshot.size() >= 1 && data.userNameSnapshot.size() <= 120 &&
+      data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: CompanyAuditDocument
+    function isValidCompanyAuditDocument(data) {
+      return data.keys().hasAll([
+        'authorUid',
+        'title',
+        'category',
+        'content',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'authorUid',
+        'title',
+        'category',
+        'content',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 && data.authorUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.authorUid == request.auth.uid &&
+      data.title is string && data.title.size() >= 3 && data.title.size() <= 150 &&
+      data.category is string && data.category.size() >= 3 && data.category.size() <= 40 &&
+      data.category in ['company_overview', 'quality_standard', 'sop_workflow', 'audit_rubric'] &&
+      data.content is string && data.content.size() >= 10 && data.content.size() <= 15000 &&
+      data.status is string && data.status.size() >= 4 && data.status.size() <= 20 &&
+      data.status in ['published', 'archived'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Connection test document (read-only verification)
+    match /test/{docId} {
+      allow get: if isSignedIn() && isValidId(docId);
+      allow list, write: if false;
+    }
+
+    // Admins lookup collection (read-only from client, managed externally)
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, write: if false;
+    }
+
+    // User Profiles Collection
+    match /users/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isSuperAdminToken());
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName',
+            'jobRole',
+            'department',
+            'jobDescription',
+            'updatedAt'
+          ]))
+        );
+      allow delete: if isVerifiedUser() && isValidId(userId) && isAdmin();
+
+      // User Interactions Subcollection (Strict User Isolation + Super Admin Audit Visibility)
+      match /interactions/{interactionId} {
+        allow get: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(interactionId) &&
+          (isOwner(userId) || isAdmin());
+        allow list: if isVerifiedUser() &&
+          isValidId(userId) &&
+          ((isOwner(userId) && resource.data.userId == request.auth.uid) || isSuperAdminToken());
+        allow create: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(interactionId) &&
+          isValidAuditInteraction(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(interactionId) &&
+          (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Company Information & Audit Basis Documents
+    match /company_docs/{docId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(docId) &&
+        (resource.data.status == 'published' || isAdmin());
+      allow list: if isVerifiedUser() &&
+        (resource.data.status == 'published' || isSuperAdminToken());
+      allow create: if isAdmin() &&
+        isValidId(docId) &&
+        isValidCompanyAuditDocument(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(docId) &&
+        isValidCompanyAuditDocument(incoming()) &&
+        incoming().authorUid == existing().authorUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'category',
+          'content',
+          'status',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(docId);
+    }
+  }
+}

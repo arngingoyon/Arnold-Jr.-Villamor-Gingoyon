@@ -1,0 +1,6 @@
+{
+  "name": "AuditPulse AI — Enterprise Quality Audit & Process Intelligence",
+  "description": "Role-based enterprise quality audit workspace powered by Gemini 3.6 Flash and Cloud Firestore with strict user data isolation and super admin governance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
